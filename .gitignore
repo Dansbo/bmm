@@ -1,0 +1,15 @@
+# Object files
+*.o
+
+# Linker output
+*.map
+*.sym
+
+# Libraries
+*.bin
+*.BIN
+
+# Program files
+*.prg
+*.PRG
+
