@@ -89,7 +89,11 @@ loop:	lda	scratch+2
 :	pla
 	sta	scratch+2
 	sty	scratch+3
-	ldy	#2
+	jsr	check_header
+	bcc	:+
+	lda	#MM_ERR_CORRUPT_HDR
+	rts
+:	ldy	#2
 	jsr	lda_bank
 	; compare to the one specified in the call
 	cmp	scratch
@@ -508,6 +512,36 @@ zp4:	ldy	$42+1
 	sty	zpp2+1
 	rts
 .endproc
+
+;*****************************************************************************
+; Check memory area header to ensure the checksum is correct
+;=============================================================================
+; Inputs:	ZP pointer must point to beginning of header
+;		.X = bank
+; Outputs:	.C = Clear on success otherwise Set
+;-----------------------------------------------------------------------------
+; Uses:		.A, .Y & scratch+5
+; Preserves	.X
+;*****************************************************************************
+.proc check_header: near
+	jsr	lday_bank
+	sty	scratch+5
+	eor	scratch+5
+	sta	scratch+5
+	ldy	#2
+	jsr	lda_bank
+	eor	scratch+5
+	eor	#$AA
+	sta	scratch+5
+	ldy	#3
+	jsr	lda_bank
+	cmp	scratch+5
+	clc
+	beq	:+
+	sec
+:	rts
+.endproc
+
 
 .proc updzp1: near	; sta zp1+0, sty zp1+1
 	sta	$42+0
