@@ -13,7 +13,9 @@ scratch:	.res	6
 
 FREE_ADDR	= $A000
 HANDLE_CNT	= $A002
-first_item	= $A003
+FIRST_ITEM	= $A003
+
+MEM_HDR_SIZE	= 4
 
 ; Offsets from low-ram start address
 _isr_bank	= 6
@@ -38,11 +40,71 @@ bank_cpy:
 	jmp	$0000
 
 ;*****************************************************************************
-; Free the block of memory at pointer and move any following used memory
+; Return an actual memory address to the area assigned to a handle id
 ;=============================================================================
+; Inputs:	.A & .Y = handle_id (bank/cnt)
+; Outputs:	.A & .Y = Memory address, Carry clear on success
+;		.X = Bank
+;		.C set on error with errorcode in .A
 ;-----------------------------------------------------------------------------
+; Preserves:	nothing
 ;*****************************************************************************
 .proc mm_get_ptr: near
+	tax
+	sty	scratch
+	lda	#<(FREE_ADDR+3)
+	ldy	#>(FREE_ADDR+3)
+	jsr	updzp1
+	; Read first memory block address
+	jsr	lday_bank
+	; Check if the address is zero
+	pha
+	sty	scratch+1
+	ora	scratch+1
+	bne	:+
+	pla
+	lda	#MM_ERR_HANDLE_NOTFOUND
+	sec
+	rts
+	; If it is not zero, we can check the memory block for handle id
+:	pla
+	sta	scratch+2
+	sty	scratch+3
+	; Store current memory area address
+loop:	lda	scratch+2
+	ldy	scratch+3
+	jsr	updzp1	; Set ZP to point to memory block
+	; Read next address
+	jsr	lday_bank
+	; Check if the address is zero
+	pha
+	sty	scratch+1
+	ora	scratch+1
+	bne	:+
+	pla
+	lda	#MM_ERR_HANDLE_NOTFOUND
+	sec
+	rts
+	; Fetch handle id from memory block header
+:	pla
+	sta	scratch+2
+	sty	scratch+3
+	ldy	#2
+	jsr	lda_bank
+	; compare to the one specified in the call
+	cmp	scratch
+	beq	end		; If equal, return address otherwise check next
+	bra	loop
+end:	lda	scratch+2
+	ldy	scratch+3
+	clc
+	adc	#MEM_HDR_SIZE
+	pha
+	tya
+	adc	#$00
+	tay
+	pla
+	clc
 	rts
 .endproc
 
