@@ -6,7 +6,7 @@ SKIPIMPORT=1
 .export mm_init, mm_set_isr, mm_clear_isr, mm_alloc, mm_remaining, mm_free, mm_init_bank
 .export mm_update_zp, mm_get_ptr
 
-.segment "MEMMANBSS"
+.segment "MEMMAN"
 lowram_addr:	.res	2
 orig_isr:	.res	2
 scratch:	.res	6
@@ -22,8 +22,6 @@ _isr_bank	= 6
 _isr_addr	= 10
 _isr_orig	= 16
 
-
-.segment "MEMMAN"
 ; Internal jump table into lowram functions
 ; The bank-load and store functions use first ZP pointer for the address and X for bank
 lda_bank:		; Return byte in A					X=bank, Y=offset
@@ -36,8 +34,45 @@ sta_bank:		; Store value in A					A=val, X=bank, Y=offset
 	jmp	$0000
 stay_bank:		; Store A to lowbyte, Y to highbyte			X=bank
 	jmp	$0000
+; Bank copy function uses two ZP pointers
 bank_cpy:
 	jmp	$0000
+
+;*****************************************************************************
+; Free the block of memory at pointer and move any following used memory
+;=============================================================================
+; Inputs:	.A & .Y = handle_id (bank/cnt)
+;-----------------------------------------------------------------------------
+;*****************************************************************************
+.proc mm_free: near
+	; Find pointer for handle_id or exit with error
+	jsr	mm_get_ptr
+	bcc	:+
+	rts
+	; Subtract the 4 byte header from the pointer
+:	sec
+	sbc	#MEM_HDR_SIZE
+	pha
+	tya
+	sbc	#0
+	tay
+	pla
+	; Save the starting address of the memory area
+	sta	scratch		; This is going to be the to-ptr
+	sty	scratch+1
+	; Save the starting address of rest of memory
+	jsr	lday_bank
+	sta	scratch+2	; This is going to be the from-ptr
+	sty	scratch+3
+
+	lda	#<FREE_ADDR
+	ldy	#>FREE_ADDR
+	jsr	updzp1
+	jsr	lday_bank
+	sec
+
+	rts
+.endproc
 
 ;*****************************************************************************
 ; Return an actual memory address to the area assigned to a handle id
@@ -52,8 +87,8 @@ bank_cpy:
 .proc mm_get_ptr: near
 	tax
 	sty	scratch
-	lda	#<(FREE_ADDR+3)
-	ldy	#>(FREE_ADDR+3)
+	lda	#<FIRST_ITEM
+	ldy	#>FIRST_ITEM
 	jsr	updzp1
 	; Read first memory block address
 	jsr	lday_bank
@@ -70,7 +105,7 @@ bank_cpy:
 :	pla
 	sta	scratch+2
 	sty	scratch+3
-	; Store current memory area address
+	; Check if current handle id matches
 loop:	lda	scratch+2
 	ldy	scratch+3
 	jsr	updzp1	; Set ZP to point to memory block
@@ -85,7 +120,7 @@ loop:	lda	scratch+2
 	lda	#MM_ERR_HANDLE_NOTFOUND
 	sec
 	rts
-	; Fetch handle id from memory block header
+	; Store next address for loop iteration
 :	pla
 	sta	scratch+2
 	sty	scratch+3
@@ -99,8 +134,7 @@ loop:	lda	scratch+2
 	cmp	scratch
 	beq	end		; If equal, return address otherwise check next
 	bra	loop
-end:	lda	scratch+2
-	ldy	scratch+3
+end:	jsr	readzp1
 	clc
 	adc	#MEM_HDR_SIZE
 	pha
@@ -109,15 +143,6 @@ end:	lda	scratch+2
 	tay
 	pla
 	clc
-	rts
-.endproc
-
-;*****************************************************************************
-; Free the block of memory at pointer and move any following used memory
-;=============================================================================
-;-----------------------------------------------------------------------------
-;*****************************************************************************
-.proc mm_free: near
 	rts
 .endproc
 
@@ -478,11 +503,7 @@ zp4:	ldy	$42+1
 	sta	mm_init::zp2+1
 	sty	mm_init::zp3+1
 	sta	updzp1+1
-	sty	updzp2+1
-	sta	inczp1+1
-	sty	inczp2+1
-	sta	zerozp1l+1
-	sty	zerozp2l+1
+	sta	readzp1+1
 	sta	zp01+1
 	sta	zp02+1
 	sta	zp03+1
@@ -501,13 +522,7 @@ zp4:	ldy	$42+1
 	sta	mm_init::zp1+1
 	sty	mm_init::zp4+1
 	sta	updzp1+3
-	sty	updzp2+3
-	sta	updzp1h+1
-	sty	updzp2h+1
-	sta	inczp1+5
-	sty	inczp2+5
-	sta	inczp1h+1
-	sty	inczp2h+1
+	sta	readzp1+3
 	sta	zpp1+1
 	sty	zpp2+1
 	rts
@@ -548,45 +563,9 @@ zp4:	ldy	$42+1
 	sty	$42+1
 	rts
 .endproc
-.proc updzp2: near	; sta zp2+0, sty zp2+1
-	sta	$42+0
-	sty	$42+1
-	rts
-.endproc
-.proc updzp1h: near	; sta zp1+1
-	sta	$42+1
-	rts
-.endproc
-.proc updzp2h: near	; sta zp2+1
-	sta	$42+1
-	rts
-.endproc
-.proc inczp1: near	; inc zp1, bne :+, inc zp1+1
-	inc	$42
-	bne	:+
-	inc	$42+1
-:	rts
-.endproc
-.proc inczp2: near	; inc zp2, bne :+, inc zp2+1
-	inc	$42
-	bne	:+
-	inc	$42+1
-:	rts
-.endproc
-.proc inczp1h: near	; inc zp1+1
-	inc	$42+1
-	rts
-.endproc
-.proc inczp2h: near	; inc zp2+1
-	inc	$42+1
-	rts
-.endproc
-.proc zerozp1l: near	; stz zp1
-	stz	$42
-	rts
-.endproc
-.proc zerozp2l: near	; stz zp2
-	stz	$42
+.proc readzp1: near	; lda zp1+0, ldy zp1+1
+	lda	$42+0
+	ldy	$42+1
 	rts
 .endproc
 
