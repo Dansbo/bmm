@@ -52,32 +52,98 @@ bank_cpy:
 	; Subtract the 4 byte header from the pointer
 :	sec
 	sbc	#MEM_HDR_SIZE
-	pha
-	tya
+	sta	scratch+0	; Store in scratch & scratch+1
+	tya			; This is going to be the to-ptr
 	sbc	#0
+	sta	scratch+1
 	tay
-	pla
-	; Save the starting address of the memory area
-	sta	scratch		; This is going to be the to-ptr
-	sty	scratch+1
+	lda	scratch+0
+	jsr	updzp2
 	; Save the starting address of rest of memory
 	jsr	lday_bank
 	sta	scratch+2	; This is going to be the from-ptr
 	sty	scratch+3
-	; Calculate the size of the memory area being freed
-	sec
-	sbc	scratch
-	sta	scratch+4
-	tya
-	sbc	scratch+1
-	sta	scratch+5
-
+	; Calculate the size of the remaining memory
 	lda	#<FREE_ADDR
 	ldy	#>FREE_ADDR
 	jsr	updzp1
 	jsr	lday_bank
 	sec
-
+	sbc	scratch+2
+	pha
+	tya
+	sbc	scratch+3
+	pha
+	; Calculate the size of memory freed. Store in scratch+0 & scratch+1
+	sec
+	lda	scratch+2
+	sbc	scratch+0
+	sta	scratch+0
+	lda	scratch+3
+	sbc	scratch+1
+	sta	scratch+1
+	; Calculate new free address by subtracting size from free address
+	jsr	lday_bank	; Get free address
+	sec
+	sbc	scratch+0
+	pha
+	tya
+	sbc	scratch+1
+	tay
+	pla
+	jsr	stay_bank	; Update memory bank with new free address
+	; Set the low-ram scratch area to the number of bytes that needs to be copied.
+	lda	lowram_addr
+	ldy	lowram_addr+1
+	jsr	updzp1
+	; Pull high-byte and store in scratch+5
+	ply
+	sty	scratch+5
+	; Pull low-byte and store in scratch+4
+	pla
+	sta	scratch+4
+	; Check if low- and high-byte are 0
+	ora	scratch+5
+	beq	end
+	; Restore low-byte in .A
+	lda	scratch+4
+	jsr	stay_bank	; Store size to low-ram
+	lda	scratch+2
+	ldy	scratch+3
+	jsr	updzp1		; Update source pointer
+	txa			; Set source- & destination ram bank to the same
+	jsr	bank_cpy
+end:	; Write 0s to last address to show it is the last
+	lda	#<FREE_ADDR
+	ldy	#>FREE_ADDR
+	jsr	updzp1
+	jsr	lday_bank
+	jsr	updzp1
+	lda	#0
+	ldy	#0
+	jsr	stay_bank
+	; Update headers of copied memory blocks by subtracting the freed memory
+	; stored in scratc+0 & scratch+1
+	jsr	readzp2
+loop:	jsr	updzp1
+	jsr	lday_bank
+	pha
+	sty	scratch+5
+	ora	scratch+5
+	beq	:+
+	pla
+	sec
+	sbc	scratch+0
+	pha
+	tya
+	sbc	scratch+1
+	tay
+	pla
+	jsr	stay_bank
+	jsr	update_checksum
+	jsr	lday_bank
+	bra	loop
+:	pla
 	rts
 .endproc
 
@@ -257,17 +323,8 @@ needed=scratch+4
 	ldy	#2
 	lda	scratch+2
 	jsr	sta_bank
-	; Calculate checksum of header
-	jsr	lday_bank
-	sty	scratch
-	eor	scratch
-	sta	scratch
-	ldy	#2
-	jsr	lda_bank
-	eor	scratch
-	eor	#$AA
-	ldy	#3
-	jsr	sta_bank
+	; Update checksum of header
+	jsr	update_checksum
 	; Write zero's as pointer in next memory block
 	jsr	lday_bank
 	jsr	updzp1
@@ -499,6 +556,8 @@ zp4:	ldy	$42+1
 	sty	mm_init::zp3+1
 	sta	updzp1+1
 	sta	readzp1+1
+	sty	updzp2+1
+	sty	readzp2+1
 	sta	zp01+1
 	sta	zp02+1
 	sta	zp03+1
@@ -518,9 +577,33 @@ zp4:	ldy	$42+1
 	sty	mm_init::zp4+1
 	sta	updzp1+3
 	sta	readzp1+3
+	sty	updzp2+3
+	sty	readzp2+3
 	sta	zpp1+1
 	sty	zpp2+1
 	rts
+.endproc
+
+;*****************************************************************************
+; Calculate and update the checksum of a memory block
+;=============================================================================
+; Inputs:	ZP1 pointing to head of memory block
+;		.X = bank
+;-----------------------------------------------------------------------------
+; Uses:		.A, .Y & scratch+5
+; Preserves	.X
+;*****************************************************************************
+.proc update_checksum: near
+	jsr	lday_bank
+	sty	scratch+5
+	eor	scratch+5
+	sta	scratch+5
+	ldy	#2
+	jsr	lda_bank
+	eor	scratch+5
+	eor	#$AA
+	iny
+	jmp	sta_bank
 .endproc
 
 ;*****************************************************************************
@@ -558,7 +641,17 @@ zp4:	ldy	$42+1
 	sty	$42+1
 	rts
 .endproc
+.proc updzp2: near	; sta zp2+0, sty zp1+1
+	sta	$42+0
+	sty	$42+1
+	rts
+.endproc
 .proc readzp1: near	; lda zp1+0, ldy zp1+1
+	lda	$42+0
+	ldy	$42+1
+	rts
+.endproc
+.proc readzp2: near	; lda zp2+0, ldy zp2+1
 	lda	$42+0
 	ldy	$42+1
 	rts
@@ -737,8 +830,8 @@ _bank_cpy:
 	phy
 	ldy	#0
 	; Set source bank
-loop:	sta	X16_RAMBank_Reg
-	cpx	X16_RAMBank_Reg
+	sta	X16_RAMBank_Reg
+loop:	cpx	X16_RAMBank_Reg
 	bne	:+
 zp10:	lda	($42),y
 zp20:	sta	($44),y
