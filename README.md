@@ -59,6 +59,26 @@ These 4 bytes are used for the memory area header:
 |  $02 | 1 byte | Handle ID in current bank |
 | $03 | 1 byte | Checksum of header |
 ## Using in your project
+The library is designed to be used in CC65 assembler projects. To include the library in your own project, you need `memman.inc` & `memman.o`
+
+When linking your project with the banked memory manager library, you need a custom cc65 configuration file. The configuration file must contain definition of two segments `MEMMAN` & `MMLOWRAM` like this:
+```
+SEGMENTS {
+	...
+	MEMMAN:	  load = HIRAM, type = ro;
+	MMLOWRAM: load = HIRAM, type = ro, define = yes;
+	...
+}
+```
+The MMLOWRAM segment must have the define=yes option to ensure that lowram does not exceed the expected size.
+
+In order to use the functions and constants in the library, you should include the `memman.inc` file in your own source files.
+
+When linking your project you simply link it against the `memman.o` file as well.
+```
+ld65 -C yourproject.cfg memman.o yourproject.asm -o yourproject.prg
+``` 
+
 ## Error Codes
 | Code | Name | Description |
 |------|------|-------------|

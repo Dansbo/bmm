@@ -4,7 +4,7 @@ SKIPIMPORT=1
 
 MEMMAN_VERSION	= $0008
 
-.import __LOWRAM_SIZE__
+.import __MMLOWRAM_SIZE__
 .export mm_init, mm_set_isr, mm_clear_isr, mm_alloc, mm_remaining, mm_free, mm_init_bank
 .export mm_update_zp, mm_get_ptr
 
@@ -822,7 +822,7 @@ shift_done:
 	rts
 .endproc
 
-.segment "LOWRAM"
+.segment "MMLOWRAM"
 _low_scratch:
 	.word	0
 ;*****************************************************************************
@@ -1029,4 +1029,4 @@ lsh1:	ora	_low_scratch+1
 
 _end_lowram:
 
-.assert __LOWRAM_SIZE__ <= 255, error, "LOWRAM segment may not be larger than 255 bytes"
+.assert __MMLOWRAM_SIZE__ <= 255, error, "MMLOWRAM segment may not be larger than 255 bytes"
