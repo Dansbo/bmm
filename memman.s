@@ -14,9 +14,15 @@ scratch:	.res	6
 FREE_ADDR	= $A000
 FIRST_ITEM	= $A002
 ID_BITMAP	= $A004
+FREE_ADDR_OFS	= $00
+FIRST_ITEM_OFS	= $02
+
+MEM_HANDLE_OFS	= $02
+MEM_CRC_OFS	= $03
 
 MEM_HDR_SIZE	= 4
 BANK_HDR_SIZE	= 36
+BITMAP_SIZE	= BANK_HDR_SIZE-4	; 4 bytes for addresses
 
 ; Offsets from low-ram start address
 _isr_bank	= 6
@@ -43,6 +49,7 @@ bank_cpy:
 ; Free the block of memory with handle_id and move any following used memory
 ;=============================================================================
 ; Inputs:	.A & .Y = handle_id (bank/cnt)
+; Outputs:	.C set on error with errorcode in .A
 ;-----------------------------------------------------------------------------
 ; Uses:		.A, .Y, .X, both ZP pointers & scratch areas
 ;*****************************************************************************
@@ -122,31 +129,31 @@ end:	; Write 0s to last address to show it is the last
 	lda	#<FREE_ADDR
 	ldy	#>FREE_ADDR
 	jsr	updzp1
-	jsr	lday_bank
+	jsr	lday_bank	; Get last address
 	jsr	updzp1
 	lda	#0
 	ldy	#0
-	jsr	stay_bank
+	jsr	stay_bank	; Store 0's to it
 	; Update headers of copied memory blocks by subtracting the freed memory
 	; stored in scratc+0 & scratch+1
-	jsr	readzp2
+	jsr	readzp2		; address of first memory object that has been moved
 loop:	jsr	updzp1
-	jsr	lday_bank
+	jsr	lday_bank	; Read address of next memory object
 	pha
 	sty	scratch+5
 	ora	scratch+5
-	beq	:+
+	beq	:+		; If the address is all 0's, we are done
 	pla
 	sec
-	sbc	scratch+0
+	sbc	scratch+0	; Subtract the freed size
 	pha
 	tya
 	sbc	scratch+1
 	tay
 	pla
-	jsr	stay_bank
+	jsr	stay_bank	; Store it back to the memory header
 	jsr	update_checksum
-	jsr	lday_bank
+	jsr	lday_bank	; Get address of next memory object
 	bra	loop
 :	pla			; Cleanup stack
 	pla			; Get cnt-part of handle_id
@@ -164,7 +171,7 @@ loop:	jsr	updzp1
 ; Preserves:	nothing
 ;*****************************************************************************
 .proc mm_get_ptr: near
-	tax
+	tax			; .X = Bank
 	sty	scratch
 	lda	#<FIRST_ITEM
 	ldy	#>FIRST_ITEM
@@ -200,7 +207,7 @@ loop:	lda	scratch+2
 	bcc	:+
 	lda	#MM_ERR_CORRUPT_HDR
 	rts
-:	ldy	#2
+:	ldy	#MEM_HANDLE_OFS	; Read handle_id
 	jsr	lda_bank
 	; compare to the one specified in the call
 	cmp	scratch
@@ -271,7 +278,7 @@ needed=scratch+4
 :	; Calculate space needed including 4 byte header
 	clc
 	lda	requested
-	adc	#4
+	adc	#MEM_HDR_SIZE
 	sta	needed
 	lda	requested+1
 	adc	#0
@@ -321,7 +328,7 @@ needed=scratch+4
 	pla
 	jsr	stay_bank
 	; Write handle to memory block header
-	ldy	#2
+	ldy	#MEM_HANDLE_OFS
 	lda	scratch+2
 	jsr	sta_bank
 	; Update checksum of header
@@ -431,21 +438,21 @@ needed=scratch+4
 	bne	:+		; If not, just write the address to bank header
 	lda	#BANK_HDR_SIZE	; If it was zero, set low-byte to skip bank header
 	; Write free address to bank header
-:	ldy	#0
+:	ldy	#FREE_ADDR_OFS
 	jsr	sta_bank
-	ldy	#2
+	ldy	#FIRST_ITEM_OFS
 	jsr	sta_bank
 	pla
-	ldy	#1
+	ldy	#FREE_ADDR_OFS+1
 	jsr	sta_bank
-	ldy	#3
+	ldy	#FIRST_ITEM_OFS+1
 	jsr	sta_bank
 	; Zero out ID bitmap
 	lda	#<ID_BITMAP
 	ldy	#>ID_BITMAP
 	jsr	updzp1
 	lda	#0
-	ldy	#BANK_HDR_SIZE-4-1
+	ldy	#BITMAP_SIZE-1
 :	jsr	sta_bank
 	dey
 	bne	:-
@@ -596,7 +603,7 @@ zp4:	ldy	$42+1
 ;=============================================================================
 ; Inputs:	.A = cnt-part of handle_id
 ;		.X = bank
-; Outputs:	None
+; Outputs:	.C clear
 ;-----------------------------------------------------------------------------
 ; Uses:		.A, .Y & first ZP pointer
 ; Preserves:	.X & scratch
@@ -613,7 +620,7 @@ zp4:	ldy	$42+1
 	phy			; Save byte index
 	and	#%00000111	; bit index 0-7
 	tay			; .Y = bit index
-
+	; Create bitmask for freed handle
 	lda	#1
 	cpy	#0
 	beq	bitmask_done
@@ -634,6 +641,7 @@ bitmask_done:
 	jsr	sta_bank
 	pla			; Restore content of scratch
 	sta	scratch
+	clc
 	rts
 .endproc
 
@@ -659,7 +667,7 @@ byte_loop:
 	cmp	#$FF		; Are all bits set?
 	bne	bit_available	; If not, there's an ID available
 	iny
-	cpy	#BANK_HDR_SIZE-4 ; Have all bytes been checked?
+	cpy	#BITMAP_SIZE	; Have all bytes been checked?
 	bne	byte_loop
 	pla			; No handles available
 	sta	scratch
@@ -721,11 +729,11 @@ shift_done:
 	sty	scratch+5
 	eor	scratch+5
 	sta	scratch+5
-	ldy	#2
+	ldy	#MEM_HANDLE_OFS
 	jsr	lda_bank
 	eor	scratch+5
 	eor	#$AA
-	iny
+	iny	;MEM_CRC_OFS
 	jmp	sta_bank
 .endproc
 
@@ -744,12 +752,12 @@ shift_done:
 	sty	scratch+5
 	eor	scratch+5
 	sta	scratch+5
-	ldy	#2
+	ldy	#MEM_HANDLE_OFS
 	jsr	lda_bank
 	eor	scratch+5
 	eor	#$AA
 	sta	scratch+5
-	ldy	#3
+	iny	;MEM_CRC_OFS
 	jsr	lda_bank
 	cmp	scratch+5
 	clc
