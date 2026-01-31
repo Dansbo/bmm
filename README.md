@@ -35,6 +35,8 @@ Version 0.8
 The Banked Memory Manager library is designed to ease using banked memory in programs and libraries designed for the Commander X16.  
 The library is designed to handle banked memory even if it is loaded into a memory bank itself. It is able to allocate memory in any RAM bank, except bank 0 and it will keep track of remaining memory in a bank as well as pointers to allocated memory areas.  
 The library utilizes handles to let the user easily free an allocated memory area again.  
+**NOTE:** When a memory area is freed, the library defragments the remaining memory areas, potentially changing their address.  
+The `mm_get_ptr` function will always return the correct address of a memory area identified by handle.   
 The library also makes several bank safe functions availabe to load, store and copy inside banked memory.
 ## Memory Bank Header
 
