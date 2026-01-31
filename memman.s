@@ -51,30 +51,34 @@ bank_cpy:
 ; Free the block of memory with handle_id and move any following used memory
 ;=============================================================================
 ; Inputs:	.A & .Y = handle_id (bank/cnt)
+;		.C = clear=defrag, set=mark unused
 ; Outputs:	.C set on error with errorcode in .A
 ;-----------------------------------------------------------------------------
 ; Uses:		.A, .Y, .X, both ZP pointers & scratch areas
 ;*****************************************************************************
 .proc mm_free: near
 	phy			; Save cnt-part of handle_id
+	php			; Save status flags - need to check Carry later
 	; Find pointer for handle_id or exit with error
 	jsr	mm_get_ptr
 	bcc	:+
 	ply			; Cleanup stack
 	sec
 	rts
-	; Subtract the 4 byte header from the pointer
-:	sec
-	sbc	#MEM_HDR_SIZE
-	sta	scratch+0	; Store in scratch & scratch+1
-	tya			; This is going to be the to-ptr
-	sbc	#0
-	sta	scratch+1
-	tay
-	lda	scratch+0
-	jsr	updzp2
+	; Get the real pointer from zp1
+:	jsr	readzp1
+	jsr	updzp2		; Destination pointer updated
+	plp
+	; If Carry set, we do NOT defragment memory, we just mark it as dirty
+	bcc	:+
+	ldy	#1
+	jsr	lda_bank
+	ora	#%01000000
+	jsr	sta_bank
+	jsr	update_checksum
+	jmp	handle
 	; Save the starting address of rest of memory
-	jsr	lday_bank
+:	jsr	lday_bank
 	sta	scratch+2	; This is going to be the from-ptr
 	sty	scratch+3
 	; Calculate the size of the remaining memory
@@ -82,12 +86,12 @@ bank_cpy:
 	ldy	#>FREE_ADDR
 	jsr	updzp1
 	jsr	lday_bank
-	sec
+	sec			; Subtract the from-address
 	sbc	scratch+2
-	pha
+	pha			; Store low-byte of remaining mem size on stack
 	tya
 	sbc	scratch+3
-	pha
+	pha			; Store high-byte of remaining mem size on stack
 	; Calculate the size of memory freed. Store in scratch+0 & scratch+1
 	sec
 	lda	scratch+2
@@ -158,7 +162,7 @@ loop:	jsr	updzp1
 	jsr	lday_bank	; Get address of next memory object
 	bra	loop
 :	pla			; Cleanup stack
-	pla			; Get cnt-part of handle_id
+handle:	pla			; Get cnt-part of handle_id
 	jmp	free_handle
 .endproc
 
@@ -183,7 +187,6 @@ loop:	jsr	updzp1
 	; Check if high-byte of address is zero
 	cpy	#0
 	bne	:+
-	bne	:+
 	lda	#MM_ERR_HANDLE_NOTFOUND
 	sec
 	rts
@@ -191,8 +194,10 @@ loop:	jsr	updzp1
 :	sta	scratch+2
 	sty	scratch+3
 	; Check if current handle id matches
-loop:	lda	scratch+2
-	ldy	scratch+3
+loop:	lda	scratch+3	; Ensure bit 6 of high-byte is 0 for address
+	and	#$BF
+	tay
+	lda	scratch+2
 	jsr	updzp1	; Set ZP to point to memory block
 	; Read next address
 	jsr	lday_bank
@@ -209,7 +214,10 @@ loop:	lda	scratch+2
 	bcc	:+
 	lda	#MM_ERR_CORRUPT_HDR
 	rts
-:	ldy	#MEM_HANDLE_OFS	; Read handle_id
+:	lda	scratch+3
+	and	#%01000000
+	bne	loop
+	ldy	#MEM_HANDLE_OFS	; Read handle_id
 	jsr	lda_bank
 	; compare to the one specified in the call
 	cmp	scratch
@@ -454,7 +462,8 @@ needed=scratch+4
 	ldy	#>ID_BITMAP
 	jsr	updzp1
 	lda	#0
-	ldy	#BITMAP_SIZE-1
+	; Zero out bitmap and the address field of the first available memory
+	ldy	#BITMAP_SIZE-1+2
 :	jsr	sta_bank
 	dey
 	bne	:-
