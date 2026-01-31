@@ -238,7 +238,7 @@ To call a lowram function, the function offset is simply added to the start addr
 ### Function name: mm_lda_bank
 Purpose: lda from banked address  
 Communication registers: X & Y  
-Depends: zp1 pointer
+Depends: zp1 pointer  
 Preserves: X, Y and RAM bank  
 Offset: $12  
 Offset constant: `MM_LDA_BANK_OFFS`
@@ -325,7 +325,7 @@ Offset constant: `MM_STAY_BANK_OFFS`
 | A | low-byte to write to banked address |
 | Y | high-byte to write to banked address |
 ### Function name: mm_bank_copy
-Purpose: Copy memory withint banks  
+Purpose: Copy memory within banks  
 Communication registers: A & X  
 Depends: zp1, zp2 pointers and 2 first bytes of lowram area  
 Preserves: X & RAM bank
