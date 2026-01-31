@@ -13,3 +13,6 @@
 *.prg
 *.PRG
 
+# Zip files
+*.zip
+*.ZIP

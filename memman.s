@@ -870,6 +870,8 @@ _lda_bank:
 zp01:	lda	($42),y		; Load value from address pointed to by ZP pointer
 	stx	X16_RAMBank_Reg	; Restore original RAM bank
 	plx			; Restore RAM bank from caller
+	pha			; Push and restore value to set flags
+	pla
 	rts
 
 ;*****************************************************************************

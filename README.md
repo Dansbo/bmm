@@ -255,6 +255,7 @@ Offset constant: `MM_LDA_BANK_OFFS`
 | Output | Description |
 |--------|-------------|
 | A | Value read from banked memory |
+| Flags | Set according to A
 
 ### Function name: mm_lday_bank
 Purpose: lda & ldy from banked address  
