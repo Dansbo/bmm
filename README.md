@@ -1,6 +1,6 @@
 # Banked Memory Manager
 Banked Memory Manager for Commander X16  
-Version 0.8  
+Version 0.9  
 *Author: Jimmy Dansbo*
 
 **Note that this documentation can change at any time.**
@@ -189,6 +189,14 @@ Communication registers: A, Y, X & C
 | A | low-byte of handle |
 | Y | high-byte of handle |
 
+This function can be called in a different way to look for dirty memory areas instead of handles. This however meant to be used internally for defragmenting the memory.
+| Input | Purpose |
+|-------|---------|
+| A | Set to 0 to look for dirty memory |
+| X | RAM bank |
+
+In any case, the output of the function is the same.
+
 | Output | Description |
 |--------|-------------|
 | C | Carry set on error |
@@ -213,6 +221,21 @@ When memory is defragmented, it means that allocated memory get's new pointers a
 | Output | Description |
 |--------|-------------|
 | C | Carry set on error |
+| A | Error code on error |
+
+### Function name: mm_defrag
+Purpose: Defragment a memory bank  
+Communication registers: A, X & C
+
+**Description** Defragment a memory bank, freeing up previously allocated memory and in the process moving still used memory areas.  
+**Note:** After defragmentation, it is important to call `mm_get_ptr` to ensure your code has the correct memory addresses.
+| Input | Purpose |
+|-------|---------|
+| X | RAM bank to perform defragmentation on |
+
+| Output | Description |
+|--------|-------------|
+| C | Set on error |
 | A | Error code on error |
 
 ### Function name: mm_set_isr

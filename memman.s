@@ -2,11 +2,11 @@
 SKIPIMPORT=1
 .include "memman.inc"
 
-MEMMAN_VERSION	= $0008
+MEMMAN_VERSION	= $0009
 
 .import __MMLOWRAM_SIZE__
 .export mm_init, mm_set_isr, mm_clear_isr, mm_alloc, mm_remaining, mm_free, mm_init_bank
-.export mm_update_zp, mm_get_ptr
+.export mm_update_zp, mm_get_ptr, mm_defrag
 
 .segment "MEMMAN"
 lowram_addr:	.res	2
@@ -48,6 +48,69 @@ bank_cpy:
 	jmp	$0000
 
 ;*****************************************************************************
+; Defragment memory by moving memory down over previously dirty areas
+;=============================================================================
+; Inputs:	.X = RAM bank to defragment
+; Outputs:	.C set on error with errorcode in .A
+;-----------------------------------------------------------------------------
+; Uses:		.A, .Y, .X, both ZP pointers & scratch areas
+;*****************************************************************************
+.proc mm_defrag: near
+	lda	#0
+	jsr	mm_get_ptr
+	bcs	done
+	jsr	readzp1		; Get real pointer from zp1
+	sta	scratch+0
+	sty	scratch+1
+	jsr	updzp2		; Destination pointer set
+	jsr	lday_bank	; Get starting address of rest of memory
+	sta	scratch+2	; Store it temporarily it is going to
+	tya			; be the source address
+	and	#$BF		; Reset bit6 of high-byte
+	sta	scratch+3
+	; Calculate the size of the remaining memory
+	jsr	calc_remaining_size
+	pha
+	phy
+	; Calculate the size of memory freed. Store in scratch+0 & scratch+1
+	jsr	calc_freed_size
+	; Calculate new free address by subtracting size from free address
+	jsr	store_new_free_addr
+	; Set the low-ram scratch area to the number of bytes that needs to be copied.
+	lda	lowram_addr
+	ldy	lowram_addr+1
+	jsr	updzp1
+	; Pull size from stack
+	ply
+	pla
+	jsr	stay_bank	; Store size to low-ram
+	sty	scratch+5
+	; Check if low- and high-byte are 0 (last element)
+	ora	scratch+5
+	beq	last_element
+	; Update source pointer
+	lda	scratch+2
+	ldy	scratch+3
+	jsr	updzp1
+	txa			; Set source- & destination ram bank to the same
+	jsr	bank_cpy
+last_element:
+	; Write 0s to last address to show it is the last
+	jsr	zero_last_free
+	; Update headers of copied memory blocks by subtracting the freed memory
+	; stored in scratc+0 & scratch+1
+	jsr	readzp2		; address of first memory object that has been moved
+	jsr	update_mem_headers
+	bra	mm_defrag
+done:	cmp	#MM_ERR_HANDLE_NOTFOUND
+	beq	end
+	sec
+	rts
+end:	clc
+	rts
+.endproc
+
+;*****************************************************************************
 ; Free the block of memory with handle_id and move any following used memory
 ;=============================================================================
 ; Inputs:	.A & .Y = handle_id (bank/cnt)
@@ -67,12 +130,14 @@ bank_cpy:
 	rts
 	; Get the real pointer from zp1
 :	jsr	readzp1
+	sta	scratch+0
+	sty	scratch+1
 	jsr	updzp2		; Destination pointer updated
 	plp
 	; If Carry set, we do NOT defragment memory, we just mark it as dirty
 	bcc	:+
 	ldy	#1
-	jsr	lda_bank
+	jsr	lda_bank	; Mark the area as dirty by setting bit6 of high-byte
 	ora	#%01000000
 	jsr	sta_bank
 	jsr	update_checksum
@@ -82,86 +147,37 @@ bank_cpy:
 	sta	scratch+2	; This is going to be the from-ptr
 	sty	scratch+3
 	; Calculate the size of the remaining memory
-	lda	#<FREE_ADDR
-	ldy	#>FREE_ADDR
-	jsr	updzp1
-	jsr	lday_bank
-	sec			; Subtract the from-address
-	sbc	scratch+2
-	pha			; Store low-byte of remaining mem size on stack
-	tya
-	sbc	scratch+3
-	pha			; Store high-byte of remaining mem size on stack
-	; Calculate the size of memory freed. Store in scratch+0 & scratch+1
-	sec
-	lda	scratch+2
-	sbc	scratch+0
-	sta	scratch+0
-	lda	scratch+3
-	sbc	scratch+1
-	sta	scratch+1
-	; Calculate new free address by subtracting size from free address
-	jsr	lday_bank	; Get free address
-	sec
-	sbc	scratch+0
+	jsr	calc_remaining_size
 	pha
-	tya
-	sbc	scratch+1
-	tay
-	pla
-	jsr	stay_bank	; Update memory bank with new free address
+	phy
+	; Calculate the size of memory freed. Store in scratch+0 & scratch+1
+	jsr	calc_freed_size
+	; Calculate new free address by subtracting size from free address
+	jsr	store_new_free_addr
 	; Set the low-ram scratch area to the number of bytes that needs to be copied.
 	lda	lowram_addr
 	ldy	lowram_addr+1
 	jsr	updzp1
-	; Pull high-byte and store in scratch+5
+	; Pull size from stack
 	ply
-	sty	scratch+5
-	; Pull low-byte and store in scratch+4
 	pla
-	sta	scratch+4
-	; Check if low- and high-byte are 0
+	jsr	stay_bank	; Store size to low-ram
+	sty	scratch+5
+	; Check if low- and high-byte are 0 (last element)
 	ora	scratch+5
 	beq	end
-	; Restore low-byte in .A
-	lda	scratch+4
-	jsr	stay_bank	; Store size to low-ram
+	; Update source pointer
 	lda	scratch+2
 	ldy	scratch+3
-	jsr	updzp1		; Update source pointer
+	jsr	updzp1
 	txa			; Set source- & destination ram bank to the same
 	jsr	bank_cpy
 end:	; Write 0s to last address to show it is the last
-	lda	#<FREE_ADDR
-	ldy	#>FREE_ADDR
-	jsr	updzp1
-	jsr	lday_bank	; Get last address
-	jsr	updzp1
-	lda	#0
-	ldy	#0
-	jsr	stay_bank	; Store 0's to it
+	jsr	zero_last_free
 	; Update headers of copied memory blocks by subtracting the freed memory
 	; stored in scratc+0 & scratch+1
 	jsr	readzp2		; address of first memory object that has been moved
-loop:	jsr	updzp1
-	jsr	lday_bank	; Read address of next memory object
-	pha
-	sty	scratch+5
-	ora	scratch+5
-	beq	:+		; If the address is all 0's, we are done
-	pla
-	sec
-	sbc	scratch+0	; Subtract the freed size
-	pha
-	tya
-	sbc	scratch+1
-	tay
-	pla
-	jsr	stay_bank	; Store it back to the memory header
-	jsr	update_checksum
-	jsr	lday_bank	; Get address of next memory object
-	bra	loop
-:	pla			; Cleanup stack
+	jsr	update_mem_headers
 handle:	pla			; Get cnt-part of handle_id
 	jmp	free_handle
 .endproc
@@ -170,6 +186,8 @@ handle:	pla			; Get cnt-part of handle_id
 ; Return an actual memory address to the area assigned to a handle id
 ;=============================================================================
 ; Inputs:	.A & .Y = handle_id (bank/cnt)
+;		  if .A=0 look for dirty memory instead of handle,
+;		  in that case, .X must contain the bank
 ; Outputs:	.A & .Y = Memory address, Carry clear on success
 ;		.X = Bank
 ;		.C set on error with errorcode in .A
@@ -177,8 +195,11 @@ handle:	pla			; Get cnt-part of handle_id
 ; Preserves:	nothing
 ;*****************************************************************************
 .proc mm_get_ptr: near
+	pha			; Save bank part of handle
+	cmp	#0
+	beq	:+
 	tax			; .X = Bank
-	sty	scratch
+:	sty	scratch
 	lda	#<FIRST_ITEM
 	ldy	#>FIRST_ITEM
 	jsr	updzp1
@@ -187,6 +208,7 @@ handle:	pla			; Get cnt-part of handle_id
 	; Check if high-byte of address is zero
 	cpy	#0
 	bne	:+
+	pla			; Clear stack of bank-part of handle
 	lda	#MM_ERR_HANDLE_NOTFOUND
 	sec
 	rts
@@ -204,6 +226,7 @@ loop:	lda	scratch+3	; Ensure bit 6 of high-byte is 0 for address
 	; Check if the high-byte of address is zero
 	cpy	#0
 	bne	:+
+	pla			; clear stack of bank-part of handle
 	lda	#MM_ERR_HANDLE_NOTFOUND
 	sec
 	rts
@@ -212,8 +235,17 @@ loop:	lda	scratch+3	; Ensure bit 6 of high-byte is 0 for address
 	sty	scratch+3
 	jsr	check_header	; Uses scratch+5
 	bcc	:+
+	pla			; clear stack of bank-part of handle
 	lda	#MM_ERR_CORRUPT_HDR
 	rts
+:	pla			; Get bank-part of handle
+	pha			; Save it on stack again
+	; If bank-part of handle is 0, we check if address is marked
+	bne	:+
+	lda	scratch+3
+	and	#%01000000
+	bne	end
+	bra	loop
 :	lda	scratch+3
 	and	#%01000000
 	bne	loop
@@ -223,7 +255,8 @@ loop:	lda	scratch+3	; Ensure bit 6 of high-byte is 0 for address
 	cmp	scratch
 	beq	end		; If equal, return address otherwise check next
 	bra	loop
-end:	jsr	readzp1
+end:	pla			; clear bank-part of handle from stack
+	jsr	readzp1		; Read current address and add MEM_HDR_SIZE
 	clc
 	adc	#MEM_HDR_SIZE
 	pha
@@ -830,6 +863,99 @@ shift_done:
 	ldy	$42+1
 	rts
 .endproc
+
+;*****************************************************************************
+; The below 5 functions were originally code inside the mm_free function.
+; The code has been moved out into separate functions as they are also needed
+; by the mm_defrag function.
+; NOTE: These functions should not be called by any functions other than
+;	* mm_free
+;	* mm_defrag
+;	They rely on zp pointers and scratch memory being set up before call
+;*****************************************************************************
+;+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+.proc calc_remaining_size: near
+	lda	#<FREE_ADDR
+	ldy	#>FREE_ADDR
+	jsr	updzp1
+	jsr	lday_bank
+	sec			; Subtract the from-address
+	sbc	scratch+2
+	pha			; Store low-byte of remaining mem size on stack
+	tya
+	sbc	scratch+3
+	tay
+	pla
+	rts
+.endproc
+.proc calc_freed_size: near
+	sec			; Calculate difference between dest- and source-pointer
+	lda	scratch+2	; Source-pointer in scratch+2&scratch+3
+	sbc	scratch+0	; Dest-pointer in scratch+0&scratch+1
+	sta	scratch+0	; Store size in scratch+0&scratch+1
+	lda	scratch+3
+	sbc	scratch+1
+	sta	scratch+1
+	rts
+.endproc
+.proc store_new_free_addr: near
+	jsr	lday_bank	; Get free address
+	sec			; Subtract size of freed mem
+	sbc	scratch+0	; located in scratch+0&scratch+1
+	pha
+	tya
+	sbc	scratch+1
+	tay
+	pla
+	jmp	stay_bank	; Update memory bank with new free address
+.endproc
+.proc zero_last_free: near
+	lda	#<FREE_ADDR
+	ldy	#>FREE_ADDR
+	jsr	updzp1
+	jsr	lday_bank	; Get last address
+	jsr	updzp1
+	lda	#0
+	ldy	#0
+	jmp	stay_bank	; Store 0's to it
+.endproc
+.proc update_mem_headers: near
+	pha
+	tya			; Move high-byte to .A to reset bit6
+	and	#$BF
+	tay
+	pla
+	jsr	updzp1		; Store address in zp1 pointer
+	jsr	lday_bank	; Read address of next memory object
+	pha
+	sty	scratch+5
+	ora	scratch+5
+	beq	:+		; If the address is all 0's, we are done
+	pla
+	sec
+	sbc	scratch+0	; Subtract the freed size
+	pha
+	tya
+	; If bit6 of high-byte is set, reset it for calculation
+	and	#$40
+	bne	isset
+	tya
+	sbc	scratch+1
+	bra	store
+isset:	tya
+	and	#$BF		; Reset bit6
+	sbc	scratch+1
+	ora	#$40		; Set bit6
+store:	tay
+	pla
+	jsr	stay_bank	; Store it back to the memory header
+	jsr	update_checksum
+	jsr	lday_bank	; Get address of next memory object
+	bra	update_mem_headers
+:	pla			; Cleanup stack
+	rts
+.endproc
+;+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 .segment "MMLOWRAM"
 _low_scratch:
