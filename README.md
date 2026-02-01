@@ -13,23 +13,23 @@ Version 0.9
 * [Using in your project](#using-in-your-project)
 * [Error codes](#error-codes)
 * [Functions](#functions)  
-	*[mm_init](#function-name-mm_init)  
-	*[mm_init_bank](#function-name-mm_init_bank)  
-	*[mm_update_zp](#function-name-mm_update_zp)  
-	*[mm_remaining](#function-name-mm_remaining)  
-	*[mm_alloc](#function-name-mm_alloc)  
-	*[mm_get_ptr](#function-name-mm_get_ptr)  
-	*[mm_free](#function-name-mm_free)  
-	*[mm_defrag](#function-name-mm_defrag)  
-	*[mm_set_isr](#function-name-mm_set_isr)  
-	*[mm_clear_isr](#function-name-mm_clear_isr)
+	* [mm_init](#function-name-mm_init)  
+	* [mm_init_bank](#function-name-mm_init_bank)  
+	* [mm_update_zp](#function-name-mm_update_zp)  
+	* [mm_remaining](#function-name-mm_remaining)  
+	* [mm_alloc](#function-name-mm_alloc)  
+	* [mm_get_ptr](#function-name-mm_get_ptr)  
+	* [mm_free](#function-name-mm_free)  
+	* [mm_defrag](#function-name-mm_defrag)  
+	* [mm_set_isr](#function-name-mm_set_isr)  
+	* [mm_clear_isr](#function-name-mm_clear_isr)
 * [Lowram Functions](#lowram-functions)  
-	*[mm_lda_bank](#function-name-mm_lda_bank)  
-	*[mm_lday_bank](#function-name-mm_lday_bank)  
-	*[mm_ldyxa_bank](#function-name-mm_ldyxa_bank)  
-	*[mm_sta_bank](#function-name-mm_sta_bank)  
-	*[mm_stay_bank](#function-name-mm_stay_bank)  
-	*[mm_bank_copy](#function-name-mm_bank_copy)
+	* [mm_lda_bank](#function-name-mm_lda_bank)  
+	* [mm_lday_bank](#function-name-mm_lday_bank)  
+	* [mm_ldyxa_bank](#function-name-mm_ldyxa_bank)  
+	* [mm_sta_bank](#function-name-mm_sta_bank)  
+	* [mm_stay_bank](#function-name-mm_stay_bank)  
+	* [mm_bank_copy](#function-name-mm_bank_copy)
 
 ## Overview
 
@@ -190,7 +190,7 @@ Communication registers: A, Y, X & C
 | A | low-byte of handle |
 | Y | high-byte of handle |
 
-This function can be called in a different way to look for dirty memory areas instead of handles. This however meant to be used internally for defragmenting the memory.
+This function can be called in a different way to look for dirty memory areas instead of handles. This is meant to be used internally for defragmenting the memory.
 | Input | Purpose |
 |-------|---------|
 | A | Set to 0 to look for dirty memory |
