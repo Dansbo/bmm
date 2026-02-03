@@ -51,11 +51,17 @@ bank_cpy:
 ; Get the size of an allocated memory area
 ;=============================================================================
 ; Inputs:	.A & .Y = handle_id (bank/cnt)
+; Outputs:	.C set on error
+;		.A = low-byte of size or errorcode if .C set
+;		.Y = high-byte of size
 ;-----------------------------------------------------------------------------
+; Uses:		.A, .Y, .X, scratch+0 & scratch+1
 ;*****************************************************************************
 .proc mm_get_size: near
 	jsr	mm_get_ptr	; Find actual address of handle_id
-	sta	scratch+0
+	bcc	:+
+	rts
+:	sta	scratch+0
 	sty	scratch+1
 	jsr	lday_bank	; Read address of next element
 	; Subtract current element address from next element address to get size
