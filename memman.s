@@ -57,6 +57,7 @@ bank_cpy:
 ;*****************************************************************************
 .proc mm_defrag: near
 	lda	#0
+	ldy	#1
 	jsr	mm_get_ptr
 	bcs	done
 	jsr	readzp1		; Get real pointer from zp1
@@ -112,6 +113,7 @@ end:	clc
 
 ;*****************************************************************************
 ; Free the block of memory with handle_id and move any following used memory
+; or just mark the memory as dirty
 ;=============================================================================
 ; Inputs:	.A & .Y = handle_id (bank/cnt)
 ;		.C = clear=defrag, set=mark unused
@@ -187,7 +189,9 @@ handle:	pla			; Get cnt-part of handle_id
 ;=============================================================================
 ; Inputs:	.A & .Y = handle_id (bank/cnt)
 ;		  if .A=0 look for dirty memory instead of handle,
-;		  in that case, .X must contain the bank
+;		  in that case, .X must contain the bank and .Y is set to
+;		  non-zero if searching from start of RAM, otherwise it will
+;		  continue search from the address in zp1. 
 ; Outputs:	.A & .Y = Memory address, Carry clear on success
 ;		.X = Bank
 ;		.C set on error with errorcode in .A
@@ -197,13 +201,17 @@ handle:	pla			; Get cnt-part of handle_id
 .proc mm_get_ptr: near
 	pha			; Save bank part of handle
 	cmp	#0
-	beq	:+
-	tax			; .X = Bank
-:	sty	scratch
-	lda	#<FIRST_ITEM
+	bne	normal
+	cpy	#0
+	beq	checknext
+	bra	dirty
+normal:	tax			; .X = Bank
+	sty	scratch+0
+dirty:	lda	#<FIRST_ITEM
 	ldy	#>FIRST_ITEM
 	jsr	updzp1
 	; Read first memory block address
+checknext:
 	jsr	lday_bank
 	; Check if high-byte of address is zero
 	cpy	#0
@@ -277,21 +285,31 @@ end:	pla			; clear bank-part of handle from stack
 ; Preserves:	.X
 ;*****************************************************************************
 .proc mm_remaining: near
+	phx			; Preserve .X, scratch+0 & scratch+1
+	lda	scratch+0
+	pha
+	lda	scratch+1
+	pha
 	lda	#<FREE_ADDR	; Set address $A000 in ZP pointer
 	ldy	#>FREE_ADDR
 	jsr	updzp1
 	jsr	lday_bank	; Read next free address from bank
-	sta	scratch
+	sta	scratch+0
 	sty	scratch+1
 	; Subtract free address from $C000
 	lda	#<X16_RAM_WindowEnd	; low-byte
 	sec
-	sbc	scratch
+	sbc	scratch+0
 	pha
 	lda	#>X16_RAM_WindowEnd	; high-byte
 	sbc	scratch+1
 	tay
 	pla
+	plx			; Restore scratch+0, scratch+1 & .X
+	stx	scratch+1
+	plx
+	stx	scratch+0
+	plx
 	rts
 .endproc
 
@@ -307,7 +325,6 @@ end:	pla			; clear bank-part of handle from stack
 ; Uses:		ZP pointer
 ;*****************************************************************************
 .proc mm_alloc: near
-newfree=scratch+0
 requested=scratch+2
 needed=scratch+4
 	sta	requested+0
@@ -326,7 +343,61 @@ needed=scratch+4
 	lda	requested+1
 	adc	#0
 	sta	needed+1
-	; Check if available space is larger than requested space
+	; Check if any dirty blocks can accomodate the needed memory
+	ldy	#1
+dirtyloop:
+	lda	#0
+	jsr	mm_get_ptr
+	bcs	nodirty		; No dirty memory available
+	; Dirty memory found, check if it is large enough
+	jsr	readzp1		; Put current address in scratch
+	sta	scratch+0
+	sty	scratch+1
+	jsr	lday_bank	; Get next address
+	pha			; Ensure bit6 of high-byte is reset
+	tya
+	and	#$BF
+	tay
+	pla
+	sec			; Subtract current address from next address
+	sbc	scratch+0
+	pha
+	tya
+	sbc	scratch+1
+	tay
+	pla
+	sec			; Subtract the needes space from size of dirty memory
+	sbc	needed
+	tya
+	sbc	needed+1
+	ldy	#0
+	bcc	dirtyloop	; If dirty memory is not large enough, search again
+	; Dirty memory is large enough
+	jsr	get_handle
+	bcc	:+
+	lda	#MM_ERR_NOHANDLE
+	rts
+:	pha
+	lda	scratch+0
+	ldy	scratch+1
+	jsr	updzp1
+	pla
+	ldy	#MEM_HANDLE_OFS
+	jsr	sta_bank
+	jsr	lday_bank	; Read address to reset bit6 of high-byte
+	pha
+	tya
+	and	#$BF		; Reset bit6 of high-byte
+	tay
+	pla
+	jsr	stay_bank	; Update address
+	jsr	update_checksum
+	ldy	#MEM_HANDLE_OFS	; Read the handle
+	jsr	lda_bank
+	tay			; Combine with bank for handle_id
+	txa
+	rts
+nodirty:; Check if available space is larger than requested space
 	jsr	mm_remaining	; Remaining space in .A/.Y
 	sec
 	sbc	needed
@@ -765,10 +836,12 @@ shift_done:
 ; Inputs:	ZP1 pointing to head of memory block
 ;		.X = bank
 ;-----------------------------------------------------------------------------
-; Uses:		.A, .Y & scratch+5
+; Uses:		.A, .Y
 ; Preserves	.X
 ;*****************************************************************************
 .proc update_checksum: near
+	lda	scratch+5	; Preserve scratch+5
+	pha
 	jsr	lday_bank
 	sty	scratch+5
 	eor	scratch+5
@@ -778,7 +851,9 @@ shift_done:
 	eor	scratch+5
 	eor	#$AA
 	iny	;MEM_CRC_OFS
-	jmp	sta_bank
+	jsr	sta_bank
+	pla			; Restore scratch+5
+	sta	scratch+5
 .endproc
 
 ;*****************************************************************************
@@ -788,10 +863,12 @@ shift_done:
 ;		.X = bank
 ; Outputs:	.C = Clear on success otherwise Set
 ;-----------------------------------------------------------------------------
-; Uses:		.A, .Y & scratch+5
+; Uses:		.A, .Y
 ; Preserves	.X
 ;*****************************************************************************
 .proc check_header: near
+	lda	scratch+5	; Preserve scratch+5
+	pha
 	jsr	lday_bank
 	sty	scratch+5
 	eor	scratch+5
@@ -807,7 +884,9 @@ shift_done:
 	clc
 	beq	:+
 	sec
-:	rts
+:	pla			; Restore scratch+5
+	sta	scratch+5
+	rts
 .endproc
 
 ;*****************************************************************************
