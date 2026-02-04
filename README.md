@@ -15,7 +15,6 @@ Version 0.10
 * [Functions](#functions)  
 	* [mm_init](#function-name-mm_init)  
 	* [mm_init_bank](#function-name-mm_init_bank)  
-	* [mm_update_zp](#function-name-mm_update_zp)  
 	* [mm_remaining](#function-name-mm_remaining)  
 	* [mm_alloc](#function-name-mm_alloc)  
 	* [mm_get_ptr](#function-name-mm_get_ptr)  
@@ -24,6 +23,12 @@ Version 0.10
 	* [mm_get_size](#function-name-mm_get_size)
 	* [mm_set_isr](#function-name-mm_set_isr)  
 	* [mm_clear_isr](#function-name-mm_clear_isr)
+* [Zero Page](#zero-page)  
+	* [mm_update_zp](#function-name-mm_update_zp)  
+	* [mm_read_zp1](#function-name-mm_read_zp1)  
+	* [mm_read_zp2](#function-name-mm_read_zp2)  
+	* [mm_store_zp1](#function-name-mm_store_zp1)  
+	* [mm_store_zp2](#function-name-mm_store_zp2)  
 * [Lowram Functions](#lowram-functions)  
 	* [mm_lda_bank](#function-name-mm_lda_bank)  
 	* [mm_lday_bank](#function-name-mm_lday_bank)  
@@ -138,16 +143,6 @@ Preserves: X
 | A | Low-byte of next free address |
 | Y | High-byte of next free address |
 | X | RAM bank to initialize |
-
-### Function name: mm_update_zp
-Purpose: Update the ZeroPage pointers used by the library  
-Communication registers: A & Y
-
-**Description** Change the ZeroPage address used by the library. This function is part of the library initialization, but can be called seperately if the user needs to change the ZeroPage addresses used by the library.
-| Registers | Purpose |
-|-----------|---------|
-| A | First ZeroPage address to use for pointer (zp1) |
-| Y | Second ZeroPage address to use for pointer (zp2) |
 
 ### Function name: mm_remaining
 Purpose: Return the amount of memory available in a specified memory bank  
@@ -282,6 +277,58 @@ Communication registers: none
 Uses: A
 
 **Description** Remove the banked interrupt service routine and restore the original interrupt handler.
+## Zero Page
+A few functions are exported that only used to manipulate the Zero Page addresses used by the library.
+### Function name: mm_update_zp
+Purpose: Update the ZeroPage pointers used by the library  
+Communication registers: A & Y
+
+**Description** Change the ZeroPage address used by the library. This function is part of the library initialization, but can be called seperately if the user needs to change the ZeroPage addresses used by the library.
+| Registers | Purpose |
+|-----------|---------|
+| A | First ZeroPage address to use for pointer (zp1) |
+| Y | Second ZeroPage address to use for pointer (zp2) |
+
+### Function name: mm_read_zp1
+Purpose: Read the value/address currently stored in ZP1
+Communication registers: A & Y
+
+**Description** Returns the values stored in the first Zero Page Pointer that was provided to the library.
+| Output | Description |
+|------- |-------------|
+| A | low-byte of ZP1
+| Y | high-byte of ZP1
+
+### Function name: mm_read_zp2
+Purpose: Read the value/address currently stored in ZP2
+Communication registers: A & Y
+
+**Description** Returns the values stored in the second Zero Page Pointer that was provided to the library.
+| Output | Description |
+|------- |-------------|
+| A | low-byte of ZP2
+| Y | high-byte of ZP2
+
+### Function name: mm_store_zp1
+Purpose: Store a new value/address in ZP1
+Communication registers: A & Y
+
+**Description** Update the first Zero Page pointer (zp1) with a new value/address.
+| Input | Purpose |
+|------- |-------------|
+| A | low-byte of new value/address
+| Y | high-byte of new value/address
+
+### Function name: mm_store_zp2
+Purpose: Store a new value/address in ZP2
+Communication registers: A & Y
+
+**Description** Update the second Zero Page pointer (zp2) with a new value/address.
+| Input | Purpose |
+|------- |-------------|
+| A | low-byte of new value/address
+| Y | high-byte of new value/address
+
 ## Lowram functions
 There are several lowram functions made available by the library. They are located in the memory area that was made available to the library at initialization.
 
@@ -290,6 +337,8 @@ To call a lowram function, the function offset is simply added to the start addr
 ```
 	jsr	lowram+MM_LDA_BANK_OFS
 ```
+
+The functions are also exported by the library so if your code is running in the same bank as the library, you can simply call the functions directly.  
 ### Function name: mm_lda_bank
 Purpose: lda from banked address  
 Communication registers: X & Y  
