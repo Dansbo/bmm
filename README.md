@@ -1,6 +1,6 @@
 # Banked Memory Manager
 Banked Memory Manager for Commander X16  
-Version 0.10  
+Version 0.11  
 *Author: Jimmy Dansbo*
 
 **Note that this documentation can change at any time.**

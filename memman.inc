@@ -1,7 +1,7 @@
 .ifndef memman_inc
 memman_inc=1
 
-MEMMAN_VERSION	= $000A
+MEMMAN_VERSION	= $000B
 
 MM_ERR_ZERO		= $01
 MM_ERR_NOSPACE		= $02
