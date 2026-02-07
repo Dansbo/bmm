@@ -419,9 +419,10 @@ To call a lowram function, the function offset is simply added to the start addr
 ```
 
 The functions are also exported by the library so if your code is running in the same bank as the library, you can simply call the functions directly.  
+
 ### Function name: mm_lda_bank
 Purpose: lda from banked address  
-Communication registers: X & Y  
+Communication registers: A, X & Y  
 Depends: zp1 pointer  
 Preserves: X, Y and RAM bank  
 Offset: $12  
@@ -452,6 +453,7 @@ Offset constant: `MM_LDAY_BANK_OFFS`
 |--------|---------|
 | zp1 | ZeroPage pointer to address to read from |
 | X | RAM bank to read from |
+| Y | Offset from pointer to read from |
 
 | Output | Description |
 |--------|-------------|
@@ -459,7 +461,7 @@ Offset constant: `MM_LDAY_BANK_OFFS`
 | Y | high-byte of value read from banked memory |
 
 ### Function name: mm_ldayx_bank
-Purpose: ldy, ldx & lda from banked address  
+Purpose: lda, ldy & ldx from banked address  
 Communication registers: A, Y & X  
 Depends: zp1 pointer  
 Preserves: RAM bank before call  
@@ -470,13 +472,14 @@ Offset constant: `MM_LDAYX_BANK_OFFS`
 | Inputs | Purpose |
 |--------|---------|
 | zp1 | ZeroPage pointer to address to read from |
-| X | RAM bank to read from
+| X | RAM bank to read from |
+| Y | Offset from pointer to read from |
 
 | Output | Description |
 |--------|-------------|
-| Y | low-byte of value read from banked memory |
-| X | mid-byte of value read from banked memory |
-| A | high-byte of value read from banked memory |
+| A | low-byte of value read from banked memory |
+| Y | mid-byte of value read from banked memory |
+| X | high-byte of value read from banked memory |
 
 ### Function name: mm_sta_bank
 Purpose: sta to banked address  
