@@ -26,13 +26,21 @@ Version 0.10
 * [Zero Page](#zero-page)  
 	* [mm_update_zp](#function-name-mm_update_zp)  
 	* [mm_read_zp1](#function-name-mm_read_zp1)  
+	* [mm_read_zp1l](#function-name-mm_read_zp1l)  
+	* [mm_read_zp1h](#function-name-mm_read_zp1h)  
 	* [mm_read_zp2](#function-name-mm_read_zp2)  
+	* [mm_read_zp2l](#function-name-mm_read_zp2l)  
+	* [mm_read_zp2h](#function-name-mm_read_zp2h)  
 	* [mm_store_zp1](#function-name-mm_store_zp1)  
+	* [mm_store_zp1l](#function-name-mm_store_zp1l)  
+	* [mm_store_zp1h](#function-name-mm_store_zp1h)  
 	* [mm_store_zp2](#function-name-mm_store_zp2)  
+	* [mm_store_zp2l](#function-name-mm_store_zp2l)  
+	* [mm_store_zp2h](#function-name-mm_store_zp2h)  
 * [Lowram Functions](#lowram-functions)  
 	* [mm_lda_bank](#function-name-mm_lda_bank)  
 	* [mm_lday_bank](#function-name-mm_lday_bank)  
-	* [mm_ldyxa_bank](#function-name-mm_ldyxa_bank)  
+	* [mm_ldayx_bank](#function-name-mm_ldayx_bank)  
 	* [mm_sta_bank](#function-name-mm_sta_bank)  
 	* [mm_stay_bank](#function-name-mm_stay_bank)  
 	* [mm_bank_copy](#function-name-mm_bank_copy)
@@ -296,8 +304,26 @@ Communication registers: A & Y
 **Description** Returns the values stored in the first Zero Page Pointer that was provided to the library.
 | Output | Description |
 |------- |-------------|
-| A | low-byte of ZP1
-| Y | high-byte of ZP1
+| A | low-byte of ZP1 |
+| Y | high-byte of ZP1 |
+
+### Function name: mm_read_zp1l
+Purpose: Read the low-byte of ZP1  
+Communication registers: A  
+
+**Description** Returns the low-byte stored in the first Zero Page pointer that was provided to the library
+| Output | Description |
+|--------|-------------|
+| A | low-byte of ZP1 |
+
+### Function name: mm_read_zp1h
+Purpose: Read the high-byte of ZP1  
+Communication registers: A
+
+**Description** Returns the high-byte stored in the first Zero Page pointer that was provided to the library
+| Output | Description |
+|--------|-------------|
+| A | high-byte of ZP1 |
 
 ### Function name: mm_read_zp2
 Purpose: Read the value/address currently stored in ZP2  
@@ -306,8 +332,26 @@ Communication registers: A & Y
 **Description** Returns the values stored in the second Zero Page Pointer that was provided to the library.
 | Output | Description |
 |------- |-------------|
-| A | low-byte of ZP2
-| Y | high-byte of ZP2
+| A | low-byte of ZP2 |
+| Y | high-byte of ZP2 |
+
+### Function name: mm_read_zp2l
+Purpose: Read the low-byte of ZP2  
+Communication registers: A  
+
+**Description** Returns the low-byte stored in the second Zero Page pointer that was provided to the library  
+| Output | Description |
+|--------|-------------|
+| A | low-byte of ZP2 |
+
+### Function name: mm_read_zp2h
+Purpose: Read the high-byte of ZP2  
+Communication registers: A
+
+**Description** Returns the high-byte stored in the second Zero Page pointer that was provided to the library
+| Output | Description |
+|--------|-------------|
+| A | high-byte of ZP2 |
 
 ### Function name: mm_store_zp1
 Purpose: Store a new value/address in ZP1  
@@ -316,8 +360,26 @@ Communication registers: A & Y
 **Description** Update the first Zero Page pointer (zp1) with a new value/address.
 | Input | Purpose |
 |------- |-------------|
-| A | low-byte of new value/address
-| Y | high-byte of new value/address
+| A | low-byte of new value/address |
+| Y | high-byte of new value/address |
+
+### Function name: mm_store_zp1l
+Purpose: Store new low-byte in ZP1  
+Communication registers: A
+
+**Description** Update the low-byte of the first Zero Page pointer with a new value
+| Input | Purpose |
+|------- |-------------|
+| A | low-byte of new value |
+
+### Function name: mm_store_zp1h
+Purpose: Store new high-byte in ZP1
+Communication registers: A
+
+**Description** Update the high-byte of the first Zero Page pointer with a new value
+| Input | Purpose |
+|------- |-------------|
+| A | high-byte of new value |
 
 ### Function name: mm_store_zp2
 Purpose: Store a new value/address in ZP2  
@@ -326,8 +388,26 @@ Communication registers: A & Y
 **Description** Update the second Zero Page pointer (zp2) with a new value/address.
 | Input | Purpose |
 |------- |-------------|
-| A | low-byte of new value/address
-| Y | high-byte of new value/address
+| A | low-byte of new value/address |
+| Y | high-byte of new value/address |
+
+### Function name: mm_store_zp2l
+Purpose: Store new low-byte in ZP2  
+Communication registers: A
+
+**Description** Update the low-byte of the second Zero Page pointer with a new value
+| Input | Purpose |
+|------- |-------------|
+| A | low-byte of new value |
+
+### Function name: mm_store_zp2h
+Purpose: Store new high-byte in ZP2
+Communication registers: A
+
+**Description** Update the high-byte of the second Zero Page pointer with a new value
+| Input | Purpose |
+|------- |-------------|
+| A | high-byte of new value |
 
 ## Lowram functions
 There are several lowram functions made available by the library. They are located in the memory area that was made available to the library at initialization.
@@ -378,13 +458,13 @@ Offset constant: `MM_LDAY_BANK_OFFS`
 | A | low-byte of value read from banked memory |
 | Y | high-byte of value read from banked memory |
 
-### Function name: mm_ldyxa_bank
+### Function name: mm_ldayx_bank
 Purpose: ldy, ldx & lda from banked address  
 Communication registers: A, Y & X  
 Depends: zp1 pointer  
 Preserves: RAM bank before call  
 Offset: $33  
-Offset constant: `MM_LDYXA_BANK_OFFS`
+Offset constant: `MM_LDAYX_BANK_OFFS`
 
 **Description** Reads three bytes from banked memory specified by first ZeroPage pointer into registers Y, X & A
 | Inputs | Purpose |

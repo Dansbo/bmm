@@ -7,8 +7,9 @@ MEMMAN_VERSION	= $000A
 .import __MMLOWRAM_SIZE__
 .export mm_init, mm_set_isr, mm_clear_isr, mm_alloc, mm_remaining, mm_free, mm_init_bank
 .export mm_update_zp, mm_get_ptr, mm_defrag, mm_get_size
-.export mm_lda_bank, mm_lday_bank, mm_ldyxa_bank, mm_sta_bank, mm_stay_bank
-.export mm_read_zp1, mm_read_zp2, mm_store_zp1, mm_store_zp2
+.export mm_lda_bank, mm_lday_bank, mm_ldayx_bank, mm_sta_bank, mm_stay_bank
+.export mm_read_zp1, mm_read_zp1l, mm_read_zp1h, mm_read_zp2, mm_read_zp2l, mm_read_zp2h
+.export mm_store_zp1, mm_store_zp1l, mm_store_zp1h, mm_store_zp2, mm_store_zp2l, mm_store_zp2h
 
 .segment "MEMMAN"
 lowram_addr:	.res	2
@@ -41,8 +42,8 @@ lda_bank:		; Return byte in A					X=bank, Y=offset
 mm_lday_bank:
 lday_bank:		; Return lowbyte in A, highbyte in Y			X=bank
 	jmp	$0000
-mm_ldyxa_bank:
-ldyxa_bank:		; Return lowbyte in Y, midbyte in X , highbyte in A	X=bank
+mm_ldayx_bank:
+ldayx_bank:		; Return lowbyte in Y, midbyte in X , highbyte in A	X=bank
 	jmp	$0000
 mm_sta_bank:
 sta_bank:		; Store value in A					A=val, X=bank, Y=offset
@@ -628,8 +629,8 @@ nodirty:; Check if available space is larger than requested space
 ;		Content of first ZP pointer should be the lowram address
 ;		Content of second ZP pointer should be first free address
 ;		  in RAM bank. $A000 if it is an empty RAM bank.
-;		  Any RAM bank used by the library must reserve the first 3
-;		  bytes of the RAM Bank for the library. $A000,$A001&$A002 
+;		  Any RAM bank used by the library must reserve the first 36
+;		  bytes of the RAM Bank for the library.
 ;-----------------------------------------------------------------------------
 ; Preserves:	.X
 ;*****************************************************************************
@@ -677,13 +678,13 @@ zp2:	sta	($42),y
 	adc	lowram_addr+1
 	sta	lday_bank+2
 
-	lda	#(_ldyxa_bank-_low_scratch)
+	lda	#(_ldayx_bank-_low_scratch)
 	clc
 	adc	lowram_addr
-	sta	ldyxa_bank+1
+	sta	ldayx_bank+1
 	lda	#0
 	adc	lowram_addr+1
-	sta	ldyxa_bank+2
+	sta	ldayx_bank+2
 
 	lda	#(_sta_bank-_low_scratch)
 	clc
@@ -728,9 +729,13 @@ zp4:	ldy	$42+1
 	sta	mm_init::zp2+1
 	sty	mm_init::zp3+1
 	sta	mm_store_zp1+1
+	sta	mm_store_zp1l+1
 	sta	mm_read_zp1+1
+	sta	mm_read_zp1l+1
 	sty	mm_store_zp2+1
+	sty	mm_store_zp2l+1
 	sty	mm_read_zp2+1
+	sty	mm_read_zp2l+1
 	sta	zp01+1
 	sta	zp02+1
 	sta	zp03+1
@@ -749,9 +754,13 @@ zp4:	ldy	$42+1
 	sta	mm_init::zp1+1
 	sty	mm_init::zp4+1
 	sta	mm_store_zp1+3
+	sta	mm_store_zp1h+1
 	sta	mm_read_zp1+3
+	sta	mm_read_zp1h+1
 	sty	mm_store_zp2+3
+	sty	mm_store_zp2h+1
 	sty	mm_read_zp2+3
+	sty	mm_read_zp2h+1
 	sta	zpp1+1
 	sty	zpp2+1
 	rts
@@ -947,6 +956,30 @@ shift_done:
 .endproc
 
 ;*****************************************************************************
+; Update low-byte of first ZP pointer
+;=============================================================================
+; Inputs:	.A = low-byte of first ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except low-byte of first ZP pointer
+;*****************************************************************************
+.proc mm_store_zp1l: near
+	sta	$42+0
+	rts
+.endproc
+
+;*****************************************************************************
+; Update high-byte of first ZP pointer
+;=============================================================================
+; Inputs:	.A = high-byte of first ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except high-byte of first ZP pointer
+;*****************************************************************************
+.proc mm_store_zp1h: near
+	sta	$42+1
+	rts
+.endproc
+
+;*****************************************************************************
 ; Update address of second ZP pointer
 ;=============================================================================
 ; Inputs:	.A & .Y = low- & high-byte of address
@@ -956,6 +989,30 @@ shift_done:
 .proc mm_store_zp2: near	; sta zp2+0, sty zp1+1
 	sta	$42+0
 	sty	$42+1
+	rts
+.endproc
+
+;*****************************************************************************
+; Update low-byte of second ZP pointer
+;=============================================================================
+; Inputs:	.A = low-byte of second ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except low-byte of second ZP pointer
+;*****************************************************************************
+.proc mm_store_zp2l: near
+	sta	$42+0
+	rts
+.endproc
+
+;*****************************************************************************
+; Update high-byte of second ZP pointer
+;=============================================================================
+; Inputs:	.A = high-byte of second ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except high-byte of second ZP pointer
+;*****************************************************************************
+.proc mm_store_zp2h: near
+	sta	$42+1
 	rts
 .endproc
 
@@ -974,6 +1031,32 @@ shift_done:
 .endproc
 
 ;*****************************************************************************
+; Get low-byte of first ZP pointer
+;=============================================================================
+; Inputs:	none
+; Outputs:	.A = low-byte of first ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except .A
+;*****************************************************************************
+.proc mm_read_zp1l: near
+	lda	$42+0
+	rts
+.endproc
+
+;*****************************************************************************
+; Get high-byte of first ZP pointer
+;=============================================================================
+; Inputs:	none
+; Outputs:	.A = high-byte of first ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except .A
+;*****************************************************************************
+.proc mm_read_zp1h: near
+	lda	$42+0
+	rts
+.endproc
+
+;*****************************************************************************
 ; Get address stored in second ZP pointer
 ;=============================================================================
 ; Inputs:	none
@@ -984,6 +1067,32 @@ shift_done:
 .proc mm_read_zp2: near	; lda zp2+0, ldy zp2+1
 	lda	$42+0
 	ldy	$42+1
+	rts
+.endproc
+
+;*****************************************************************************
+; Get low-byte of second ZP pointer
+;=============================================================================
+; Inputs:	none
+; Outputs:	.A = low-byte of second ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except .A
+;*****************************************************************************
+.proc mm_read_zp2l: near
+	lda	$42+0
+	rts
+.endproc
+
+;*****************************************************************************
+; Get high-byte of second ZP pointer
+;=============================================================================
+; Inputs:	none
+; Outputs:	.A = high-byte of second ZP pointer
+;-----------------------------------------------------------------------------
+; Preserves:	All except .A
+;*****************************************************************************
+.proc mm_read_zp2h: near
+	lda	$42+0
 	rts
 .endproc
 
@@ -1138,20 +1247,25 @@ zp01:	lda	($42),y		; Load value from address pointed to by ZP pointer
 ;=============================================================================
 ; Arguments:	ZP pointer to the memory address that should be read
 ;		.X = the RAM bank to read from
+;		.Y = offset from ZP pointer
 ;-----------------------------------------------------------------------------
 ; Preserves:	.X
 ; Returns:	.A = value from ZP pointer, .Y from ZP pointer + 1
 ;*****************************************************************************
 _lday_bank:
 	phx			; Preserve X
+	phy			; Preserve offset
 	ldy	X16_RAMBank_Reg	; Save original RAM bank
 	stx	X16_RAMBank_Reg	; Switch RAM bank
 	phy			; Move original RAM bank through stack to X
 	plx
-	ldy	#1		; Read highbyte into Y
-zp02:	lda	($42),y
-	tay
-zp03:	lda	($42); Read lowbyte into A
+	ply			; Pull offset from stack
+zp02:	lda	($42),y		; Read low-byte
+	pha			; Save low-byte on stack
+	iny
+zp03:	lda	($42),y		; Read high-byte
+	tay			; Move high-byte to .Y
+	pla			; Pull low-byte from stack
 	stx	X16_RAMBank_Reg	; Restore original RAM bank
 	plx			; Restore X
 	rts
@@ -1162,24 +1276,29 @@ zp03:	lda	($42); Read lowbyte into A
 ;=============================================================================
 ; Arguments:	ZP pointer to the memory address that should be read
 ;		.X = the RAM bank to read from
+;		.Y = Offset from ZP pointer
 ;-----------------------------------------------------------------------------
 ; Preserves:	The RAM bank before call
-; Returns:	.Y=ZP pointer, .X=ZP pointer+1, .A=ZP pointer+2
+; Returns:	.A=ZP pointer, .Y=ZP pointer+1, .X=ZP pointer+2
 ;*****************************************************************************
-_ldyxa_bank:
+_ldayx_bank:
+	phy			; Save offset on stack
 	ldy	X16_RAMBank_Reg	; Save current RAM bank
 	stx	X16_RAMBank_Reg	; Set new RAM bank
-zp04:	lda	($42)		; Load value from address pointed to by ZP pointer
+	phy			; Move original RAM bank through stack to X
+	plx
+	ply			; Pull offset from stack
+zp04:	lda	($42),y		; Load value from address pointed to by ZP pointer with .Y
 	pha			; Save value to stack
-	phy			; Save RAM bank to stack
-	ldy	#1		; Initialize .Y for reading value through ZP pointer
+	iny
 zp05:	lda	($42),y		; Load next value from address pointed to by ZP pointer with .Y
-	tax			; Store value in .X
+	pha			; Store value in .X
 	iny
 zp06:	lda	($42),y		; Load next value from address pointed to by ZP pointer with .Y
-	ply			; Restore original RAM bank
-	sty	X16_RAMBank_Reg
-	ply			; Get first read value from stack
+	stx	X16_RAMBank_Reg
+	tax
+	ply
+	pla
 	rts
 
 ;*****************************************************************************
