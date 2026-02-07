@@ -2,8 +2,6 @@
 SKIPIMPORT=1
 .include "memman.inc"
 
-MEMMAN_VERSION	= $000A
-
 .import __MMLOWRAM_SIZE__
 .export mm_init, mm_set_isr, mm_clear_isr, mm_alloc, mm_remaining, mm_free, mm_init_bank
 .export mm_update_zp, mm_get_ptr, mm_defrag, mm_get_size
@@ -72,6 +70,7 @@ bank_cpy:
 	rts
 :	sta	scratch+0
 	sty	scratch+1
+	ldy	#0
 	jsr	lday_bank	; Read address of next element
 	; Subtract current element address from next element address to get size
 	sec
@@ -101,6 +100,7 @@ bank_cpy:
 	sta	scratch+0
 	sty	scratch+1
 	jsr	mm_store_zp2	; Destination pointer set
+	ldy	#0
 	jsr	lday_bank	; Get starting address of rest of memory
 	sta	scratch+2	; Store it temporarily it is going to
 	tya			; be the source address
@@ -182,7 +182,8 @@ end:	clc
 	jsr	update_checksum
 	jmp	handle
 	; Save the starting address of rest of memory
-:	jsr	lday_bank
+:	ldy	#0
+	jsr	lday_bank
 	sta	scratch+2	; This is going to be the from-ptr
 	sty	scratch+3
 	; Calculate the size of the remaining memory
@@ -249,6 +250,7 @@ dirty:	lda	#<FIRST_ITEM
 	jsr	mm_store_zp1
 	; Read first memory block address
 checknext:
+	ldy	#0
 	jsr	lday_bank
 	; Check if high-byte of address is zero
 	cpy	#0
@@ -267,6 +269,7 @@ loop:	lda	scratch+3	; Ensure bit 6 of high-byte is 0 for address
 	lda	scratch+2
 	jsr	mm_store_zp1	; Set ZP to point to memory block
 	; Read next address
+	ldy	#0
 	jsr	lday_bank
 	; Check if the high-byte of address is zero
 	cpy	#0
@@ -330,6 +333,7 @@ end:	pla			; clear bank-part of handle from stack
 	lda	#<FREE_ADDR	; Set address $A000 in ZP pointer
 	ldy	#>FREE_ADDR
 	jsr	mm_store_zp1
+	ldy	#0
 	jsr	lday_bank	; Read next free address from bank
 	sta	scratch+0
 	sty	scratch+1
@@ -390,6 +394,7 @@ dirtyloop:
 	jsr	mm_read_zp1		; Put current address in scratch
 	sta	scratch+0
 	sty	scratch+1
+	ldy	#0
 	jsr	lday_bank	; Get next address
 	pha			; Ensure bit6 of high-byte is reset
 	tya
@@ -421,6 +426,7 @@ dirtyloop:
 	pla
 	ldy	#MEM_HANDLE_OFS
 	jsr	sta_bank
+	ldy	#0
 	jsr	lday_bank	; Read address to reset bit6 of high-byte
 	pha
 	tya
@@ -455,6 +461,7 @@ nodirty:; Check if available space is larger than requested space
 	lda	#<FREE_ADDR
 	ldy	#>FREE_ADDR
 	jsr	mm_store_zp1
+	ldy	#0
 	jsr	lday_bank	; Free address in .A/.Y
 	sta	scratch		; Save in scratch for later use
 	sty	scratch+1
@@ -485,6 +492,7 @@ nodirty:; Check if available space is larger than requested space
 	; Update checksum of header
 	jsr	update_checksum
 	; Write zero's as pointer in next memory block
+	ldy	#0
 	jsr	lday_bank
 	jsr	mm_store_zp1
 	lda	#0
@@ -612,6 +620,7 @@ nodirty:; Check if available space is larger than requested space
 	lda	#<FREE_ADDR
 	ldy	#>FREE_ADDR
 	jsr	mm_store_zp1
+	ldy	#0
 	jsr	lday_bank
 	jsr	mm_store_zp1
 	lda	#0
@@ -895,6 +904,7 @@ shift_done:
 .proc update_checksum: near
 	lda	scratch+5	; Preserve scratch+5
 	pha
+	ldy	#0
 	jsr	lday_bank
 	sty	scratch+5
 	eor	scratch+5
@@ -922,6 +932,7 @@ shift_done:
 .proc check_header: near
 	lda	scratch+5	; Preserve scratch+5
 	pha
+	ldy	#0
 	jsr	lday_bank
 	sty	scratch+5
 	eor	scratch+5
@@ -1110,6 +1121,7 @@ shift_done:
 	lda	#<FREE_ADDR
 	ldy	#>FREE_ADDR
 	jsr	mm_store_zp1
+	ldy	#0
 	jsr	lday_bank
 	sec			; Subtract the from-address
 	sbc	scratch+2
@@ -1131,6 +1143,7 @@ shift_done:
 	rts
 .endproc
 .proc store_new_free_addr: near
+	ldy	#0
 	jsr	lday_bank	; Get free address
 	sec			; Subtract size of freed mem
 	sbc	scratch+0	; located in scratch+0&scratch+1
@@ -1145,6 +1158,7 @@ shift_done:
 	lda	#<FREE_ADDR
 	ldy	#>FREE_ADDR
 	jsr	mm_store_zp1
+	ldy	#0
 	jsr	lday_bank	; Get last address
 	jsr	mm_store_zp1
 	lda	#0
@@ -1158,6 +1172,7 @@ shift_done:
 	tay
 	pla
 	jsr	mm_store_zp1		; Store address in zp1 pointer
+	ldy	#0
 	jsr	lday_bank	; Read address of next memory object
 	pha
 	sty	scratch+5
@@ -1182,6 +1197,7 @@ store:	tay
 	pla
 	jsr	stay_bank	; Store it back to the memory header
 	jsr	update_checksum
+	ldy	#0
 	jsr	lday_bank	; Get address of next memory object
 	bra	update_mem_headers
 :	pla			; Cleanup stack
